@@ -7,295 +7,315 @@
 
 using namespace std::chrono;
 
-enum SEQS {Shell, Hibbard, Sedgewick};
+enum SEQS { Shell, Hibbard, Sedgewick };
 
-const int RUN = 32;
+const int MINRUN = 64;
 
-// instruments
+std::vector<int> GAPS;
 
-int GetRandomNumber(int min, int max) {
-    int num = min + rand() % (max - min + 1);
-    return num;
-}
+int MAX_DEPTH;
 
-int* GenerateArray(int length, int min, int max) {
-    int* arr = new int[length];
-    for (int i = 0; i < length; ++i)
-        arr[i] = GetRandomNumber(min, max);
-    return arr;
-}
+// utilities
 
 void PrintArray(int* arr, int length) {
-    for (int i = 0; i < length; ++i)
-        std::cout << arr[i] << " ";
-    std::cout << '\n';
-}
-
-void Swap(int& a, int& b) {
-    int temp = a;
-    a = b;
-    b = temp;
+	int i;
+	for (i = 0; i < length; ++i)
+		std::cout << arr[i] << " ";
+	std::cout << '\n';
 }
 
 void Merge(int* arr, int left, int mid, int right) {
-    int i, j, k;
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
-    int* larr = new int[n1], * rarr = new int[n2];
-    for (i = 0; i < n1; ++i)
-        larr[i] = arr[left + i];
-    for (j = 0; j < n2; ++j)
-        rarr[j] = arr[mid + 1 + j];
-    i = 0, j = 0, k = left;
-    while (i < n1 && j < n2) {
-        if (larr[i] <= rarr[j]) {
-            arr[k] = larr[i];
-            ++i;
-        }
-        else {
-            arr[k] = rarr[j];
-            ++j;
-        }
-        ++k;
-    }
-    while (i < n1) {
-        arr[k] = larr[i];
-        ++i; ++k;
-    }
-    while (j < n2) {
-        arr[k] = rarr[j];
-        ++j; ++k;
-    }
-    delete[] larr;
-    delete[] rarr;
+	int i, j, k, n1, n2;
+	int* left_arr, * right_arr;
+	n1 = mid - left + 1;
+	n2 = right - mid;
+	left_arr = new int[n1];
+	right_arr = new int[n2];
+	for (i = 0; i < n1; ++i)
+		left_arr[i] = arr[left + i];
+	for (j = 0; j < n2; ++j)
+		right_arr[j] = arr[mid + 1 + j];
+	i = 0; j = 0; k = left;
+	while (i < n1 && j < n2) {
+		if (left_arr[i] <= right_arr[j]) {
+			arr[k] = left_arr[i];
+			++i;
+		}
+		else {
+			arr[k] = right_arr[j];
+			++j;
+		}
+		++k;
+	}
+	while (i < n1) {
+		arr[k] = left_arr[i];
+		++i; ++k;
+	}
+	while (j < n2) {
+		arr[k] = right_arr[j];
+		++j; ++k;
+	}
+	delete[] left_arr;
+	delete[] right_arr;
 }
 
 int Partition(int* arr, int left, int right) {
-    int pivot = arr[right];
-    int i = left - 1;
-    for (int j = left; j <= right - 1; ++j) {
-        if (arr[j] <= pivot) {
-            ++i;
-            Swap(arr[i], arr[j]);
-        }
-    }
-    Swap(arr[i + 1], arr[right]);
-    return i + 1;
+	int i, j, temp, pivot;
+	pivot = arr[left];
+	i = left - 1;
+	j = right + 1;
+	while (true) {
+		while (++i < right && arr[i] < pivot);
+		while (--j > left && arr[j] > pivot);
+		if (i < j) {
+			temp = arr[i];
+			arr[i] = arr[j];
+			arr[j] = temp;
+		}
+		else {
+			return j;
+		}
+	}
+}
+
+void MakeSequence(int length, int seq) {
+	int i, temp;
+	switch (seq) {
+	case Shell: // Shell gap sequence
+		temp = length / 2;
+		while (temp > 0) {
+			GAPS.push_back(temp);
+			temp /= 2;
+		}
+		break;
+	case Hibbard: // Hibbard gap sequence (OEIS A000225)
+		i = 1;
+		temp = pow(2, i) - 1;
+		while (temp < length) {
+			GAPS.push_back(temp);
+			++i; temp = pow(2, i) - 1;
+		}
+		std::reverse(GAPS.begin(), GAPS.end());
+		break;
+	case Sedgewick: // Sedgewick gap sequence (OEIS A036562)
+		i = 1;
+		GAPS.push_back(1);
+		temp = pow(4, i) + 3 * pow(2, i - 1) + 1;
+		while (temp < length) {
+			GAPS.push_back(temp);
+			++i; temp = pow(4, i) + 3 * pow(2, i - 1) + 1;
+		}
+		std::reverse(GAPS.begin(), GAPS.end());
+		break;
+	default: // default is Shell sequence
+		temp = length / 2;
+		while (temp > 0) {
+			GAPS.push_back(temp);
+			temp /= 2;
+		}
+		break;
+	}
 }
 
 void Heapify(int* arr, int length, int root) {
-    int largest = root;
-    int left = 2 * root + 1;
-    int right = 2 * root + 2;
-    if (left < length && arr[left] > arr[largest])
-        largest = left;
-    if (right < length && arr[right] > arr[largest])
-        largest = right;
-    if (largest != root) {
-        Swap(arr[root], arr[largest]);
-        Heapify(arr, length, largest);
-    }
+	int left, right, largest, temp;
+	largest = root;
+	left = 2 * root + 1;
+	right = 2 * root + 2;
+	if (left < length && arr[left] > arr[largest])
+		largest = left;
+	if (right < length && arr[right] > arr[largest])
+		largest = right;
+	if (largest != root) {
+		temp = arr[root];
+		arr[root] = arr[largest];
+		arr[largest] = temp;
+		Heapify(arr, length, largest);
+	}
 }
 
-int ChoosePivot(int* arr, int left, int right) {
-    int mid = left + (right - left) / 2;
-    if (arr[mid] < arr[left])
-        Swap(arr[left], arr[mid]);
-    if (arr[right] < arr[left])
-        Swap(arr[left], arr[right]);
-    if (arr[right] < arr[mid])
-        Swap(arr[mid], arr[right]);
-    return mid;
+int CalculateMinrun(int length) {
+	int flag;
+	flag = 0;
+	while (length >= MINRUN) {
+		flag |= length & 1;
+		length >>= 1;
+	}
+	return length + flag;
 }
 
-int PartitionIntro(int* arr, int left, int right) {
-    int pivotIndex = ChoosePivot(arr, left, right);
-    int pivotValue = arr[pivotIndex];
-    Swap(arr[pivotIndex], arr[right]);
-    int storeIndex = left;
-    for (int i = left; i < right; i++) {
-        if (arr[i] < pivotValue) {
-            Swap(arr[i], arr[storeIndex]);
-            storeIndex++;
-        }
-    }
-    Swap(arr[storeIndex], arr[right]);
-    return storeIndex;
+void CalculateMaxDepth(int length) {
+	MAX_DEPTH = 2 * (log(length) / log(2));
 }
 
 // sorting algorithms
 
-void SelectionSort(int* arr, unsigned int length) {
-    int index_of_min;
-    for (int i = 0; i < length - 1; i++) {
-        index_of_min = i;
-        for (int j = i + 1; j < length; j++)
-            if (arr[j] < arr[index_of_min]) 
-                index_of_min = j;
-        if (index_of_min != i) 
-            Swap(arr[index_of_min], arr[i]);
-    }
+void SelectionSort(int* arr, int length) {
+	int i, j, min_index, temp;
+	for (i = 0; i < length - 1; ++i) {
+		min_index = i;
+		for (j = i + 1; j < length; ++j) {
+			if (arr[j] < arr[min_index]) {
+				min_index = j;
+			}
+		}
+		if (min_index != i) {
+			temp = arr[min_index];
+			arr[min_index] = arr[i];
+			arr[i] = temp;
+		}
+	}
 }
 
 void InsertionSort(int* arr, int begin, int end) {
-    int key, j;
-    for (int i = begin + 1; i <= end; i++) {
-        key = arr[i];
-        j = i - 1;
-        while (j >= begin && arr[j] > key) {
-            arr[j + 1] = arr[j];
-            --j;
-        }
-        arr[j + 1] = key;
-    }
+	int i, j, key;
+	for (i = begin + 1; i <= end; ++i) {
+		key = arr[i];
+		j = i - 1;
+		while (j >= begin && arr[j] > key) {
+			arr[j + 1] = arr[j];
+			--j;
+		}
+		arr[j + 1] = key;
+	}
 }
 
-void BubbleSort(int* arr, unsigned int length) {
-    for (int i = 0; i < length - 1; i++) 
-        for (int j = 0; j < length - i - 1; j++) 
-            if (arr[j] > arr[j + 1]) 
-                Swap(arr[j], arr[j + 1]);
+void BubbleSort(int* arr, int length) {
+	int i, j, temp;
+	bool swapped;
+	for (i = 0; i < length - 1; ++i) {
+		swapped = false;
+		for (j = 0; j < length - i - 1; ++j) {
+			if (arr[j] > arr[j + 1]) {
+				temp = arr[j];
+				arr[j] = arr[j + 1];
+				arr[j + 1] = temp;
+				swapped = true;
+			}
+		}
+		if (swapped == false) {
+			return;
+		}
+	}
 }
 
 void MergeSort(int* arr, int begin, int end) {
-    if (begin < end) {
-        int mid = begin + (end - begin) / 2;
-        MergeSort(arr, begin, mid);
-        MergeSort(arr, mid + 1, end);
-        Merge(arr, begin, mid, end);
-    }
+	if (begin < end) {
+		int mid;
+		mid = begin + (end - begin) / 2;
+		MergeSort(arr, begin, mid);
+		MergeSort(arr, mid + 1, end);
+		Merge(arr, begin, mid, end);
+	}
 }
 
 void QuickSort(int* arr, int begin, int end) {
-    if (begin < end) {
-        int pivot_index = Partition(arr, begin, end);
-        QuickSort(arr, begin, pivot_index - 1);
-        QuickSort(arr, pivot_index + 1, end);
-    }
+	int mid;
+	while (begin < end) {
+		mid = Partition(arr, begin, end);
+		if (mid - begin <= end - mid + 1) {
+			QuickSort(arr, begin, mid);
+			begin = mid + 1;
+		}
+		else {
+			QuickSort(arr, mid + 1, end);
+			end = mid;
+		}
+	}
 }
 
-void ShellSort(int* arr, int length, int seq) {
-    int i, j, k, temp, gap;
-    std::vector<int> gaps;
-    switch (seq) {
-    case 0: // Shell gap sequence
-        temp = length / 2;
-        while (temp > 0) {
-            gaps.push_back(temp);
-            temp /= 2;
-        }
-        break;
-    case 1: // Hibbard gap sequence (OEIS A000225)
-        i = 1;
-        temp = pow(2, i) - 1;
-        while (temp < length) {
-            gaps.push_back(temp);
-            ++i; temp = pow(2, i) - 1;
-        }
-        std::reverse(gaps.begin(), gaps.end());
-        break;
-    case 2: // Sedgewick gap sequence (OEIS A036562)
-        i = 1;
-        gaps.push_back(1);
-        temp = pow(4, i) + 3 * pow(2, i - 1) + 1;
-        while (temp < length) {
-            gaps.push_back(temp);
-            ++i; temp = pow(4, i) + 3 * pow(2, i - 1) + 1;
-        }
-        std::reverse(gaps.begin(), gaps.end());
-        break;
-    default: // default is Shell gap sequence
-        temp = length / 2;
-        while (temp > 0) {
-            gaps.push_back(temp);
-            temp /= 2;
-        }
-        break;
-    }
-    for (i = 0; i < gaps.size(); ++i) {
-        gap = gaps[i];
-        for (j = gap; j < length; ++j) {
-            temp = arr[j];
-            for (k = j; k >= gap && arr[k - gap] > temp; k -= gap)
-                arr[k] = arr[k - gap];
-            arr[k] = temp;
-        }
-    }
+void ShellSort(int* arr, int length) {
+	int i, j, k, gap, temp;
+	for (i = 0; i < GAPS.size(); ++i) {
+		gap = GAPS[i];
+		for (j = gap; j < length; ++j) {
+			temp = arr[j];
+			for (k = j; k >= gap && arr[k - gap] > temp; k -= gap)
+				arr[k] = arr[k - gap];
+			arr[k] = temp;
+		}
+	}
 }
 
-void HeapSort(int* arr, int length) {
-    for (int i = length / 2 - 1; i >= 0; i--)
-        Heapify(arr, length, i);
-    for (int i = length - 1; i >= 0; i--) {
-        Swap(arr[0], arr[i]);
-        Heapify(arr, i, 0);
-    }
+void HeapSort(int* arr, int begin, int end) {
+	int i, temp;
+	for (i = end / 2 - 1; i >= 0; i--)
+		Heapify(arr, end, i);
+	for (i = end - 1; i >= 0; i--) {
+		temp = arr[0];
+		arr[0] = arr[i];
+		arr[i] = temp;
+		Heapify(arr, i, 0);
+	}
 }
 
 void TimSort(int* arr, int length) {
-    for (int i = 0; i < length; i += RUN)
-        InsertionSort(arr, i, std::min((i + RUN - 1), (length - 1)));
-    for (int size = RUN; size < length; size *= 2) {
-        for (int left = 0; left < length; left += 2 * size) {
-            int mid = left + size - 1;
-            int right = std::min((left + 2 * size - 1), (length - 1));
-            if (mid < right)
-                Merge(arr, left, mid, right);
-        }
-    }
+	int i, size, left, mid, right, min_run;
+	min_run = CalculateMinrun(length);
+	for (i = 0; i < length; i += min_run)
+		InsertionSort(arr, i, std::min((i + min_run - 1), (length - 1)));
+	for (size = min_run; size < length; size *= 2) {
+		for (left = 0; left < length; left += 2 * size) {
+			mid = left + size - 1;
+			right = std::min((left + 2 * size - 1), (length - 1));
+			if (mid < right)
+				Merge(arr, left, mid, right);
+		}
+	}
 }
 
-void QuickSortIntro(int* arr, int begin, int end, int depthLimit) {
-    while (end - begin > 16) {
-        if (depthLimit == 0) {
-            // If depth limit is reached, switch to heapsort
-            std::make_heap(arr + begin, arr + end + 1);
-            std::sort_heap(arr + begin, arr + end + 1);
-            return;
-        }
-        --depthLimit;
-        int pivotIndex = PartitionIntro(arr, begin, end);
-        QuickSortIntro(arr, pivotIndex + 1, end, depthLimit);
-        end = pivotIndex - 1;
-    }
-    InsertionSort(arr, begin, end);
-}
+void IntroSort(int* arr, int begin, int end, int max_depth) {
+	int length;
+	length = end - begin + 1;
+	if (length < 16) {
+		InsertionSort(arr, begin, end);
+	}
+	else if (max_depth == 0) {
+		HeapSort(arr, begin, end);
+	}
+	else {
+		int mid;
+		mid = Partition(arr, begin, end);
+		IntroSort(arr, begin, mid, max_depth - 1);
+		IntroSort(arr, mid + 1, end, max_depth - 1);
 
-void IntroSort(int* arr, int length) {
-    int depthLimit = 2 * log(length);
-    QuickSortIntro(arr, 0, length - 1, depthLimit);
+	}
 }
 
 int main() {
-    srand(time(0));
+	srand(time(0));
 
-    int length, min, max;
-    
-    std::cout << "Input array length: ";
-    std::cin >> length;
-    
-    std::cout << "Input minimum value in range: ";
-    std::cin >> min;
-    
-    std::cout << "Input maximum value in range: ";
-    std::cin >> max;
- 
-    int* arr = GenerateArray(length, min, max);
-    
-    std::cout << "Your array: ";
-    PrintArray(arr, length);
-    
-    auto start = high_resolution_clock::now();
-    QuickSort(arr, 0, length - 1);
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
+	int i, j, min, max, length;
+	
+	int* arr;
 
-    std::cout << "Your sorted array: ";
-    PrintArray(arr, length);
+	std::cout << "Input array length: ";
+	std::cin >> length;
 
-    std::cout << "Algorithm execution time (in microseconds): " << duration.count();
-    
-    delete[] arr;
+	std::cout << "Input minimum value in range: ";
+	std::cin >> min;
+
+	std::cout << "Input maximum value in range: ";
+	std::cin >> max;
+
+	arr = new int[length];
+	for (i = 0; i < length; ++i)
+		arr[i] = (min + rand() % (max - min + 1));
+
+	std::cout << "Your array: ";
+	PrintArray(arr, length);
+
+	auto start = high_resolution_clock::now();
+	BubbleSort(arr, length);
+	auto stop = high_resolution_clock::now();
+	auto duration = duration_cast<microseconds>(stop - start);
+
+	std::cout << "Your sorted array: ";
+	PrintArray(arr, length);
+
+	std::cout << "Algorithm execution time (in microseconds): " << duration.count();
+
+	delete[] arr;
 
 	return 0;
 }
